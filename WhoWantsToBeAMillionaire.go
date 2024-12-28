@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -36,6 +37,10 @@ var (
 	Participants     [MaxParticipants]Participant
 	QuestionCount    int
 	ParticipantCount int
+	admins           = map[string]string{
+		"admin1": "password1",
+		"admin2": "password2",
+	}
 )
 
 // Utility functions
@@ -111,7 +116,8 @@ func editQuestion() {
 	for i := 0; i < 4; i++ {
 		fmt.Printf("Pilihan %d [%s]: ", i+1, Questions[index].Options[i])
 		newOption, _ := reader.ReadString('\n')
-		if newOption != "\n" {
+		newOption = strings.TrimSpace(newOption) // Trim the newline character
+		if newOption != "" {
 			Questions[index].Options[i] = newOption
 		}
 	}
@@ -244,7 +250,7 @@ func registerParticipant() {
 
 	Participants[ParticipantCount] = p
 	ParticipantCount++
-	fmt.Print("Pendaftaran berhasil! ID Anda:", p.ID, "\n")
+	fmt.Print("Pendaftaran berhasil! ID Anda: ", p.ID, "\n")
 }
 
 // getAllParticipantIDs mengembalikan daftar ID peserta yang terdaftar.
@@ -263,7 +269,7 @@ func takeQuiz(participantID int) {
 	for i := 0; i < ParticipantCount; i++ {
 		if Participants[i].ID == participantID {
 			index = i
-			break
+			i = ParticipantCount
 		}
 	}
 
@@ -276,12 +282,13 @@ func takeQuiz(participantID int) {
 	fmt.Println("\n--- Memulai Kuis ---")
 	score := 0
 	usedQuestions := make(map[int]bool)
+	totalQuestions := QuestionCount
 
 	// Memastikan semua soal bisa dijawab
-	for len(usedQuestions) < QuestionCount {
-		qIndex := rand.Intn(QuestionCount)
+	for len(usedQuestions) < totalQuestions {
+		qIndex := rand.Intn(totalQuestions)
 		for usedQuestions[qIndex] {
-			qIndex = rand.Intn(QuestionCount)
+			qIndex = rand.Intn(totalQuestions)
 		}
 		usedQuestions[qIndex] = true
 
@@ -306,7 +313,7 @@ func takeQuiz(participantID int) {
 	}
 
 	// Menampilkan skor akhir setelah selesai kuis
-	fmt.Printf("Kuis selesai! Skor Anda: %d\n", score)
+	fmt.Printf("Kuis selesai! Skor Anda: %d dari %d\n", score, totalQuestions)
 
 	// Memperbarui skor peserta
 	updateParticipantScore(participantID, score)
@@ -327,13 +334,29 @@ func updateParticipantScore(participantID, score int) {
 	fmt.Println("Terjadi kesalahan saat memperbarui skor. ID tidak ditemukan.")
 }
 
+// Mencari user berdasarkan ID menggunakan binary search
+func binarySearchParticipantID(participantID int) int {
+	low := 0
+	high := ParticipantCount - 1
+	for low <= high {
+		mid := low + (high-low)/2
+		if Participants[mid].ID == participantID {
+			return mid
+		} else if Participants[mid].ID < participantID {
+			low = mid + 1
+		} else {
+			high = mid - 1
+		}
+	}
+	return -1
+}
+
 // displayLeaderboard menampilkan papan skor peserta terurut berdasarkan skor tertinggi.
 func displayLeaderboard() {
 	hasScore := false
-	for i := 0; i < ParticipantCount; i++ {
+	for i := 0; i < ParticipantCount && !hasScore; i++ {
 		if Participants[i].Score > 0 {
 			hasScore = true
-			break
 		}
 	}
 
@@ -351,80 +374,149 @@ func displayLeaderboard() {
 	}
 }
 
-// sortParticipantsByScore mengurutkan peserta berdasarkan skor secara descending.
+// sortParticipantsByScore menggunakan insertion sort untuk mengurutkan peserta berdasarkan skor secara descending.
 func sortParticipantsByScore() {
-	for i := 0; i < ParticipantCount-1; i++ {
-		maxIdx := i
-		for j := i + 1; j < ParticipantCount; j++ {
-			if Participants[j].Score > Participants[maxIdx].Score { // Bandingkan skor
-				maxIdx = j
-			}
-		}
-		Participants[i], Participants[maxIdx] = Participants[maxIdx], Participants[i]
+    for i := 1; i < ParticipantCount; i++ {
+        key := Participants[i]
+        j := i - 1
+        for j >= 0 && Participants[j].Score < key.Score {
+            Participants[j+1] = Participants[j]
+            j = j - 1
+        }
+        Participants[j+1] = key
+    }
+}
+
+// Admin Authentication
+func authenticateAdmin() bool {
+	var username, password string
+	fmt.Print("Masukkan username: ")
+	fmt.Scanln(&username)
+	username = strings.TrimSpace(username) // Remove newline character and any surrounding whitespace
+
+	fmt.Print("Masukkan password: ")
+	fmt.Scanln(&password)
+	password = strings.TrimSpace(password) // Remove newline character and any surrounding whitespace
+
+	if pass, ok := admins[username]; ok && pass == password {
+		return true
 	}
+	fmt.Println("Username atau password salah.")
+	return false
 }
 
 // Main Function
 // Fungsi utama menjalankan menu aplikasi dan pengelolaan fitur admin serta peserta.
 func main() {
+	fmt.Println("\n-=-=-=-=-=- WELCOME TO OUR PROGRAM 'WHO WANTS TO BE A MILLIONAIRE' -=-=-=-=-=-")
+	fmt.Println("Program ini dibuat oleh Kelompok 4 Kelas IF-11-01")
+	fmt.Println("1. Anita Nurazizah Agussalim 		(2311102017)")
+	fmt.Println("2. Jordan Angkawijaya 			(2311102139)")
+	fmt.Println("3. Danendra Arden Shaduq 		(2311102146)")
+	fmt.Println("4. Dheva Dewa Septiantoni 		(2311102324)")
 	rand.Seed(time.Now().UnixNano())
-	for {
-		fmt.Println("\n--- Selamat datang di Who Wants to Be a Millionaire ---")
-		fmt.Println("1. Mode Admin")
-		fmt.Println("2. Mode Peserta")
-		fmt.Println("3. Keluar")
-		fmt.Print("Pilih opsi: ")
-		var choice int
-		fmt.Scanln(&choice)
 
-		switch choice {
-		case 1:
-			fmt.Println("\n--- Mode Admin ---")
-			fmt.Println("1. Tambah Soal")
-			fmt.Println("2. Edit Soal")
-			fmt.Println("3. Hapus Soal")
-			fmt.Println("4. Lihat Soal Terbanyak Benar/Salah")
-			fmt.Println("5. Lihat Semua Soal")
-			fmt.Println("6. Exit Admin Mode")
+	var exit bool = false
+		for !exit {
+			fmt.Println("\n--- Menu Mode ---")
+			fmt.Println("1. Mode Admin")
+			fmt.Println("2. Mode Peserta")
+			fmt.Println("3. Keluar")
 			fmt.Print("Pilih opsi: ")
-			var adminChoice int
-			fmt.Scanln(&adminChoice)
-			switch adminChoice {
+			var choice int
+			fmt.Scanln(&choice)
+	
+			switch choice {
 			case 1:
-				addQuestion()
+				if authenticateAdmin() {
+					adminMode := true
+					for adminMode {
+						fmt.Println("\n--- Mode Admin ---")
+						fmt.Println("1. Tambah Soal")
+						fmt.Println("2. Edit Soal")
+						fmt.Println("3. Hapus Soal")
+						fmt.Println("4. Lihat Soal Terbanyak Benar/Salah")
+						fmt.Println("5. Lihat Semua Soal")
+						fmt.Println("6. Exit Admin Mode")
+						fmt.Print("Pilih opsi: ")
+						var adminChoice int
+						fmt.Scanln(&adminChoice)
+						switch adminChoice {
+						case 1:
+							addQuestion()
+						case 2:
+							editQuestion()
+						case 3:
+							deleteQuestion()
+						case 4:
+							displayMostAnsweredQuestions()
+						case 5:
+							displayAllQuestions()
+						case 6:
+							adminMode = false
+						default:
+							fmt.Println("Opsi tidak valid, coba lagi.")
+						}
+					}
+				}
 			case 2:
-				editQuestion()
+				participantMode := true
+				for participantMode {
+					fmt.Println("\n--- Mode Peserta ---")
+					fmt.Println("1. Daftar")
+					fmt.Println("2. Ikuti Kuis")
+					fmt.Println("3. Papan Skor")
+					fmt.Println("4. Cari Peserta Berdasarkan ID")
+					fmt.Println("5. Exit Participant Mode")
+					fmt.Print("Pilih opsi: ")
+					var participantChoice int
+					fmt.Scanln(&participantChoice)
+					if participantChoice == 1 {
+						registerParticipant()
+					} else if participantChoice == 2 {
+						fmt.Print("Masukkan ID peserta Anda: ")
+						var participantID int
+						fmt.Scanln(&participantID)
+						takeQuiz(participantID)
+					} else if participantChoice == 3 {
+						displayLeaderboard()
+					} else if participantChoice == 4 {
+						fmt.Print("Masukkan ID peserta yang ingin dicari: ")
+						var participantID int
+						fmt.Scanln(&participantID)
+						index := binarySearchParticipantID(participantID)
+						if index != -1 {
+							fmt.Printf("Peserta ditemukan: %s dengan skor %d\n", Participants[index].Name, Participants[index].Score)
+						} else {
+							fmt.Println("Peserta tidak ditemukan.")
+						}
+					} else if participantChoice == 5 {
+						participantMode = false
+					} else {
+						fmt.Println("Opsi tidak valid, coba lagi.")
+					}
+				}
 			case 3:
-				deleteQuestion()
-			case 4:
-				displayMostAnsweredQuestions()
-			case 5:
-				displayAllQuestions()
+				fmt.Println("Keluar... Sampai jumpa!")
+				exit = true
+			default:
+				fmt.Println("Opsi tidak valid, coba lagi.")
 			}
-		case 2:
-			fmt.Println("\n--- Mode Peserta ---")
-			fmt.Println("1. Daftar")
-			fmt.Println("2. Ikuti Kuis")
-			fmt.Println("3. Papan Skor")
-			fmt.Println("4. Exit Participant Mode")
-			fmt.Print("Pilih opsi: ")
-			var participantChoice int
-			fmt.Scanln(&participantChoice)
-			if participantChoice == 1 {
-				registerParticipant()
-			} else if participantChoice == 2 {
-				fmt.Print("Masukkan ID peserta Anda: ")
-				var participantID int
-				fmt.Scanln(&participantID)
-				takeQuiz(participantID)
-			} else if participantChoice == 3 {
-				displayLeaderboard()
-			}
-		case 3:
-			fmt.Println("Keluar... Sampai jumpa!")
-			return
-		default:
-			fmt.Println("Opsi tidak valid, coba lagi.")
 		}
+}
+
+// Initialize static questions
+func init() {
+	staticQuestions := []Question{
+		{ID: generateID(getAllQuestionIDs()), Question: "What is the capital of France?\n", Options: [4]string{"Berlin\n", "Madrid\n", "Paris\n", "Rome\n"}, Answer: 2},
+		{ID: generateID(getAllQuestionIDs()), Question: "What is 2 + 2?\n", Options: [4]string{"3\n", "4\n", "5\n", "6\n"}, Answer: 1},
+		{ID: generateID(getAllQuestionIDs()), Question: "What is the largest planet in our solar system?\n", Options: [4]string{"Earth\n", "Mars\n", "Jupiter\n", "Saturn\n"}, Answer: 2},
+		{ID: generateID(getAllQuestionIDs()), Question: "What is the chemical symbol for water?\n", Options: [4]string{"H2O\n", "O2\n", "CO2\n", "NaCl\n"}, Answer: 0},
+		{ID: generateID(getAllQuestionIDs()), Question: "Who wrote 'To Kill a Mockingbird'?\n", Options: [4]string{"Harper Lee\n", "Mark Twain\n", "Ernest Hemingway\n", "F. Scott Fitzgerald\n"}, Answer: 0},
+	}
+
+	for _, q := range staticQuestions {
+		Questions[QuestionCount] = q
+		QuestionCount++
 	}
 }
